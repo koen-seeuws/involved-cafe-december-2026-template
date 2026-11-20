@@ -1,0 +1,147 @@
+@page "/"
+@implements IDisposable
+@using MyToDoList.Application.Abstractions.Commands.AddToDo
+@using MyToDoList.Application.Abstractions.Commands.DeleteToDo
+@using MyToDoList.Application.Abstractions.Commands.UpdateToDo
+@using MyToDoList.Application.Abstractions.Queries.GetMyTodos
+@inject IUseCaseDispatcher Dispatcher
+@inject CurrentUser CurrentUser
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>My to-dos</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">My to-dos</MudText>
+
+@if (!CurrentUser.IsSignedIn)
+{
+    <MudAlert Severity="Severity.Info">Sign in (top right) to see and manage your to-do list.</MudAlert>
+}
+else
+{
+    <MudDataGrid T="ToDoDto" Items="_toDos" Loading="_loading" Hover="true" Dense="true" Elevation="1">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">@CurrentUser.UserName's list</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="AddAsync">
+                Add to-do
+            </MudButton>
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="t => t.Title" />
+            <PropertyColumn Property="t => t.Description" />
+            <TemplateColumn CellClass="d-flex justify-end" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit"
+                                   OnClick="() => EditAsync(context.Item)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   aria-label="Delete" OnClick="() => DeleteAsync(context.Item)" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent>
+            <MudText>Nothing to do yet. Add your first to-do!</MudText>
+        </NoRecordsContent>
+    </MudDataGrid>
+}
+
+@code {
+    private IReadOnlyList<ToDoDto> _toDos = [];
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUser.Changed += OnUserChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!CurrentUser.IsSignedIn)
+        {
+            _toDos = [];
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _toDos = (await Dispatcher.QueryAsync(new GetMyToDosQuery())).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not load your to-dos: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (await ShowToDoDialogAsync("Add to-do", new ToDoFormModel()) is not { } model)
+            return;
+
+        await ExecuteAsync(new AddToDoCommand { Title = model.Title, Description = model.Description }, "To-do added.");
+    }
+
+    private async Task EditAsync(ToDoDto toDo)
+    {
+        var current = new ToDoFormModel { Title = toDo.Title, Description = toDo.Description };
+
+        if (await ShowToDoDialogAsync("Edit to-do", current) is not { } model)
+            return;
+
+        await ExecuteAsync(new UpdateToDoCommand { Key = toDo.Key, Title = model.Title, Description = model.Description },
+            "To-do updated.");
+    }
+
+    private async Task DeleteAsync(ToDoDto toDo)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete to-do", $"Are you sure you want to delete '{toDo.Title}'?", yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        await ExecuteAsync(new DeleteToDoCommand { Key = toDo.Key }, "To-do deleted.");
+    }
+
+    private async Task<ToDoFormModel?> ShowToDoDialogAsync(string title, ToDoFormModel model)
+    {
+        var parameters = new DialogParameters<ToDoDialog> { { d => d.Model, model } };
+        var dialog = await DialogService.ShowAsync<ToDoDialog>(title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+
+        return await dialog.Result is { Canceled: false, Data: ToDoFormModel result } ? result : null;
+    }
+
+    private async Task ExecuteAsync<TCommand>(TCommand command, string successMessage) where TCommand : ICommand
+    {
+        try
+        {
+            await Dispatcher.SendAsync(command);
+            Snackbar.Add(successMessage, Severity.Success);
+        }
+        catch (KeyNotFoundException)
+        {
+            Snackbar.Add("That to-do no longer exists.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Something went wrong: {ex.Message}", Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private void OnUserChanged() => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => CurrentUser.Changed -= OnUserChanged;
+}

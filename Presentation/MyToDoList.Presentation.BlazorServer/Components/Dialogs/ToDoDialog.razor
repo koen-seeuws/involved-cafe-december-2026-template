@@ -1,0 +1,27 @@
+<EditForm Model="Model" OnValidSubmit="Submit">
+    <DataAnnotationsValidator />
+    <MudDialog>
+        <DialogContent>
+            <MudTextField @bind-Value="Model.Title" For="() => Model.Title"
+                          Label="Title" Variant="Variant.Outlined" Counter="200" MaxLength="200"
+                          AutoFocus="true" Immediate="true" Class="mb-4" />
+            <MudTextField @bind-Value="Model.Description" For="() => Model.Description"
+                          Label="Description" Variant="Variant.Outlined" Counter="2000" MaxLength="2000"
+                          Lines="5" Immediate="true" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+        </DialogActions>
+    </MudDialog>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public ToDoFormModel Model { get; set; } = new();
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(Model));
+}

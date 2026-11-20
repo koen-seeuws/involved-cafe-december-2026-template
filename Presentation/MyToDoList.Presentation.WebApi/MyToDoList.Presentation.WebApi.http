@@ -1,0 +1,33 @@
+@baseUrl = http://localhost:5080
+@user = alice
+
+### All to-dos (everyone)
+GET {{baseUrl}}/api/todos
+
+### My to-dos
+GET {{baseUrl}}/api/me/todos
+X-User: {{user}}
+
+### Add a to-do
+POST {{baseUrl}}/api/me/todos
+X-User: {{user}}
+Content-Type: application/json
+
+{
+  "title": "Buy coffee",
+  "description": "For the Involved café"
+}
+
+### Update a to-do (replace the key with one returned by GET)
+PUT {{baseUrl}}/api/me/todos/00000000-0000-0000-0000-000000000000
+X-User: {{user}}
+Content-Type: application/json
+
+{
+  "title": "Buy more coffee",
+  "description": "Twice as much"
+}
+
+### Delete a to-do
+DELETE {{baseUrl}}/api/me/todos/00000000-0000-0000-0000-000000000000
+X-User: {{user}}

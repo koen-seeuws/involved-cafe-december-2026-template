@@ -1,0 +1,61 @@
+@page "/all"
+@using MyToDoList.Application.Abstractions.Queries.GetAllToDos
+@inject IUseCaseDispatcher Dispatcher
+@inject ISnackbar Snackbar
+
+<PageTitle>Everybody's to-dos</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Everybody's to-dos</MudText>
+
+<MudDataGrid T="ToDoDto" Items="_toDos" Loading="_loading" QuickFilter="QuickFilter"
+             Groupable="true" Hover="true" Dense="true" Elevation="1">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start" Immediate="true"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Clearable="true" />
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Refresh" OnClick="LoadAsync" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="t => t.Owner" Grouping="true" GroupBy="t => t.Owner">
+            <GroupTemplate>
+                <MudText Typo="Typo.subtitle2">@context.Grouping.Key (@context.Grouping.Count())</MudText>
+            </GroupTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="t => t.Title" />
+        <PropertyColumn Property="t => t.Description" />
+    </Columns>
+    <NoRecordsContent>
+        <MudText>Nobody has anything to do.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<ToDoDto> _toDos = [];
+    private bool _loading;
+    private string? _search;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _toDos = (await Dispatcher.QueryAsync(new GetAllToDosQuery())).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not load the to-dos: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool QuickFilter(ToDoDto toDo) =>
+        string.IsNullOrWhiteSpace(_search)
+        || toDo.Owner.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || toDo.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || toDo.Description.Contains(_search, StringComparison.OrdinalIgnoreCase);
+}
